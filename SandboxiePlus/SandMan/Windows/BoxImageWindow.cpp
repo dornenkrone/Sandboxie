@@ -101,6 +101,14 @@ CBoxImageWindow::CBoxImageWindow(EAction Action, QWidget *parent)
 	//restoreGeometry(theConf->GetBlob("BoxImageWindow/Window_Geometry"));
 }
 
+void CBoxImageWindow::SetForce(bool force)
+{
+	ui.chkProtect->setEnabled(!force);
+	ui.chkProtect->setChecked(true);
+	ui.chkAutoLock->setChecked(true);
+	ui.chkAutoLock->setEnabled(!force);
+}
+
 CBoxImageWindow::~CBoxImageWindow()
 {
 	//theConf->SetBlob("BoxImageWindow/Window_Geometry", saveGeometry());

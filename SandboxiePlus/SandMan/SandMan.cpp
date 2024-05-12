@@ -6,7 +6,7 @@
 #include "Views/SbieView.h"
 #include "../MiscHelpers/Common/CheckableMessageBox.h"
 #include <QWinEventNotifier>
-#include "./Dialogs/MultiErrorDialog.h"
+#include "../MiscHelpers/Common/MultiErrorDialog.h"
 #include "../QSbieAPI/SbieUtils.h"
 #include "../QSbieAPI/Sandboxie/BoxBorder.h"
 #include "../QSbieAPI/Sandboxie/SbieTemplates.h"
@@ -119,7 +119,7 @@ CSandMan::CSandMan(QWidget *parent)
 	: QMainWindow(parent)
 {
 #if defined(Q_OS_WIN)
-	MainWndHandle = (HWND)QWidget::winId();
+	MainWndHandle = (HWND)winId();
 
 	QApplication::instance()->installNativeEventFilter(new CNativeEventFilter);
 #endif
@@ -510,6 +510,7 @@ void CSandMan::CreateMenus(bool bAdvanced)
 		m_pImportBox->setEnabled(CArchive::IsInit());
 		m_pMenuFile->addSeparator();
 		m_pRunBoxed = m_pMenuFile->addAction(CSandMan::GetIcon("Run"), tr("Run Sandboxed"), this, SLOT(OnSandBoxAction()));
+		m_pPauseAll = m_pMenuFile->addAction(CSandMan::GetIcon("Pause"), tr("Suspend All Processes"), this, SLOT(OnPauseAll()));
 		m_pEmptyAll = m_pMenuFile->addAction(CSandMan::GetIcon("EmptyAll"), tr("Terminate All Processes"), this, SLOT(OnEmptyAll()));
 		m_pLockAll = m_pMenuFile->addAction(CSandMan::GetIcon("LockClosed"), tr("Lock All Encrypted Boxes"), this, SLOT(OnLockAll()));
 		m_pMenuFile->addSeparator();
@@ -653,6 +654,7 @@ void CSandMan::CreateOldMenus()
 
 	m_pMenuFile = m_pMenuBar->addMenu(tr("&File"));
 		m_pRunBoxed = m_pMenuFile->addAction(CSandMan::GetIcon("Run"), tr("Run Sandboxed"), this, SLOT(OnSandBoxAction()));
+		m_pPauseAll = m_pMenuFile->addAction(CSandMan::GetIcon("Pause"), tr("Suspend All Processes"), this, SLOT(OnPauseAll()));
 		m_pEmptyAll = m_pMenuFile->addAction(CSandMan::GetIcon("EmptyAll"), tr("Terminate All Processes"), this, SLOT(OnEmptyAll()));
 		m_pLockAll = m_pMenuFile->addAction(CSandMan::GetIcon("LockClosed"), tr("Lock All Encrypted Boxes"), this, SLOT(OnLockAll()));
 		m_pDisableForce = m_pMenuFile->addAction(CSandMan::GetIcon("PauseForce"), tr("Pause Forcing Programs"), this, SLOT(OnDisableForce()));
@@ -830,6 +832,7 @@ QList<ToolBarAction> CSandMan::GetAvailableToolBarActions()
 			ToolBarAction{ "", nullptr },        // separator
 			ToolBarAction{ "RunBoxed", m_pRunBoxed },
 			ToolBarAction{ "IsBoxed", m_pWndFinder },
+			ToolBarAction{ "SuspendAll", m_pPauseAll },
 			ToolBarAction{ "TerminateAll", m_pEmptyAll },
 			ToolBarAction{ "LockAll", m_pLockAll },
 			ToolBarAction{ "", nullptr },        // separator
@@ -1593,6 +1596,23 @@ bool CSandMan::IsSilentMode()
 	return IsFullScreenMode();
 }
 
+void CSandMan::SafeShow(QWidget* pWidget) 
+{
+	if(theConf->GetBool("Options/CoverWindows", false))
+		ProtectWindow((HWND)pWidget->winId());
+
+	static bool Lock = false;
+	pWidget->setProperty("windowOpacity", 0.0);
+	if (Lock == false) {
+		Lock = true;
+		pWidget->show();
+		QApplication::processEvents(QEventLoop::ExcludeSocketNotifiers);
+		Lock = false;
+	} else
+		pWidget->show();
+	pWidget->setProperty("windowOpacity", 1.0);
+}
+
 QWidget* g_GUIParent = NULL;
 
 int CSandMan::SafeExec(QDialog* pDialog)
@@ -1716,6 +1736,7 @@ SB_STATUS CSandMan::ImBoxMount(const CSandBoxPtr& pBox, bool bAutoUnmount)
 	}
 
 	CBoxImageWindow window(CBoxImageWindow::eMount, this);
+	window.SetForce(pBox->GetBool("ForceProtectionOnMount", false));
 	window.SetAutoUnMount(bAutoUnmount);
 	if (theGUI->SafeExec(&window) != 1)
 		return SB_ERR(SB_Canceled);
@@ -2284,6 +2305,20 @@ void CSandMan::OnBoxClosed(const CSandBoxPtr& pBox)
 			AddAsyncOp(pProgress, true, tr("Executing OnBoxTerminate: %1").arg(Value2));
 		}
 	}
+
+	QString tempValPrefix = "Temp_";
+	QStringList to_delete;
+	QStringList list = pBox->GetTextList("Template", FALSE);
+	foreach(const QString& Value, list) {
+		if (tempValPrefix.compare(Value.left(5)) == 0)
+			to_delete.append(Value);
+	}
+	if (!to_delete.isEmpty()) {
+		foreach(const QString & Value, to_delete)
+			list.removeAt(list.indexOf(Value));
+		pBox->UpdateTextList("Template", list, FALSE);
+	}
+
 	if (!pBox->GetBool("NeverDelete", false))
 	{
 		if (pBox->GetBool("AutoDelete", false))
@@ -2466,7 +2501,7 @@ void CSandMan::OnStatusChanged()
 			if (DynData == 0)
 			{
 				QString Message = tr("Your Windows build %1 exceeds the current support capabilities of your Sandboxie version, "
-					"resulting in the disabling of token-based security isolation. Consequently, all applications will operate in application compartment mode without secure isolation.\r\n"
+					"resulting in the disabling of token-based security isolation. Consequently, all applications will operate in application compartment mode without secure isolation.\n"
 					"Please check if there is an update for sandboxie.").arg(versionInfo.dwBuildNumber);
 				OnLogMessage(Message, true);
 
@@ -2576,6 +2611,7 @@ void CSandMan::UpdateState()
 	m_pNewBox->setEnabled(isConnected);
 	m_pNewGroup->setEnabled(isConnected);
 	m_pImportBox->setEnabled(isConnected);
+	m_pPauseAll->setEnabled(isConnected);
 	m_pEmptyAll->setEnabled(isConnected);
 	m_pLockAll->setEnabled(isConnected);
 	m_pDisableForce->setEnabled(isConnected);
@@ -2875,13 +2911,7 @@ void CSandMan::OnLogSbieMessage(quint32 MsgCode, const QStringList& MsgData, qui
 
 		if (!Message.isEmpty())
 		{
-			QMessageBox msgBox(this);
-			msgBox.setTextFormat(Qt::RichText);
-			msgBox.setIcon(QMessageBox::Critical);
-			msgBox.setWindowTitle("Sandboxie-Plus");
-			msgBox.setText(Message);
-			msgBox.setStandardButtons(QMessageBox::Ok);
-			msgBox.exec();
+			ShowMessageBox(this, QMessageBox::Critical, Message);
 			/*msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
 			if (msgBox.exec() == QDialogButtonBox::Yes) {
 				OpenUrl(QUrl("https://sandboxie-plus.com/go.php?to=sbie-get-cert"));
@@ -2918,6 +2948,17 @@ void CSandMan::OnLogSbieMessage(quint32 MsgCode, const QStringList& MsgData, qui
 		m_pPopUpWindow->AddLogMessage(MsgCode, MsgData, ProcessId);
 }
 
+void CSandMan::ShowMessageBox(QWidget* Widget, QMessageBox::Icon Icon, const QString& Message)
+{
+	QMessageBox msgBox(Widget);
+	msgBox.setTextFormat(Qt::RichText);
+	msgBox.setIcon(Icon);
+	msgBox.setWindowTitle("Sandboxie-Plus");
+	msgBox.setText(Message);
+	msgBox.setStandardButtons(QMessageBox::Ok);
+	msgBox.exec();
+}
+
 void CSandMan::SaveMessageLog(QIODevice* pFile)
 {
 	foreach(const SSbieMsg& Msg, m_MessageLog)
@@ -2927,13 +2968,21 @@ void CSandMan::SaveMessageLog(QIODevice* pFile)
 bool CSandMan::CheckCertificate(QWidget* pWidget, int iType)
 {
 	QString Message;
-	if (iType == 1)
+	if (iType == 1 || iType == 2)
 	{
-		if (CERT_IS_LEVEL(g_CertInfo, eCertAdvanced))
-			return true;
+		if (iType == 1) {
+			if (CERT_IS_LEVEL(g_CertInfo, eCertAdvanced))
+				return true;
+		}
+		else {
+			if (CERT_IS_ADVANCED(g_CertInfo))
+				return true;
+		}
 
 		Message = tr("The selected feature requires an <b>advanced</b> supporter certificate.");
-		if(g_CertInfo.active)
+		if (iType == 2 && CERT_IS_TYPE(g_CertInfo, eCertPatreon))
+			Message.append(tr("<br />you need to be on the Great Patreon level or higher to unlock this feature."));
+		else if (g_CertInfo.active)
 			Message.append(tr("<br /><a href=\"https://sandboxie-plus.com/go.php?to=sbie-upgrade-cert\">Upgrade your Certificate</a> to unlock advanced features."));
 		else
 			Message.append(tr("<br /><a href=\"https://sandboxie-plus.com/go.php?to=sbie-get-cert\">Become a project supporter</a>, and receive a <a href=\"https://sandboxie-plus.com/go.php?to=sbie-cert\">supporter certificate</a>"));
@@ -3181,6 +3230,15 @@ void CSandMan::OnEmptyAll()
 	}
 
 	theAPI->TerminateAll();
+}
+
+void CSandMan::OnPauseAll()
+{
+	for (auto pBox: theAPI->GetAllBoxes()) {
+		pBox->SetSuspendedAll(TRUE);
+		for (auto pProcess : pBox->GetProcessList())
+			pProcess->TestSuspended();
+	}
 }
 
 void CSandMan::OnLockAll()
@@ -3973,8 +4031,8 @@ void CSandMan::CheckResults(QList<SB_STATUS> Results, QWidget* pParent, bool bAs
 	else if (Errors.count() == 1)
 		QMessageBox::warning(pParent ? pParent : this, tr("Sandboxie-Plus - Error"), Errors.first());
 	else if (Errors.count() > 1) {
-		CMultiErrorDialog Dialog(tr("Operation failed for %1 item(s).").arg(Errors.size()), Errors, pParent ? pParent : this);
-		Dialog.exec();
+		CMultiErrorDialog Dialog("Sandboxie-Plus", tr("Operation failed for %1 item(s).").arg(Errors.size()), Errors, pParent ? pParent : this);
+		theGUI->SafeExec(&Dialog);
 	}
 }
 
@@ -4065,16 +4123,18 @@ bool CSandMan::IsWFPEnabled() const
 	return (g_FeatureFlags & CSbieAPI::eSbieFeatureWFP) != 0;
 }
 
-QString CSandMan::GetVersion()
+QString CSandMan::GetVersion(bool bWithUpdates)
 {
-	QString Version = QString::number(VERSION_MJR) + "." + QString::number(VERSION_MIN) //.rightJustified(2, '0')
-//#if VERSION_REV > 0 || VERSION_MJR == 0
-		+ "." + QString::number(VERSION_REV)
-//#endif
+	QString Version = QString::number(VERSION_MJR) + "." + QString::number(VERSION_MIN) + "." + QString::number(VERSION_REV);
+	if (bWithUpdates) {
+		int iUpdate = COnlineUpdater::GetCurrentUpdate();
+		if (iUpdate)
+			Version += QChar('a' + (iUpdate - 1));
+	}
 #if VERSION_UPD > 0
-		+ QChar('a' + VERSION_UPD - 1)
+	else
+		Version += QChar('a' + VERSION_UPD - 1);
 #endif
-		;
 	return Version;
 }
 
@@ -4257,30 +4317,39 @@ void CSandMan::OnAbout()
 {
 	if (sender() == m_pAbout)
 	{
+		if ((QGuiApplication::queryKeyboardModifiers() & Qt::ControlModifier) != 0){
+			CSupportDialog::CheckSupport();
+			return;
+		}
+
 		QString AboutCaption = tr(
 			"<h3>About Sandboxie-Plus</h3>"
 			"<p>Version %1</p>"
-			"<p>Copyright (c) 2020-2024 by DavidXanatos</p>"
-		).arg(theGUI->GetVersion());
+			"<p>" MY_COPYRIGHT_STRING "</p>"
+		).arg(theGUI->GetVersion(true));
 
 		QString CertInfo;
-		if (!g_Certificate.isEmpty()) {
-			CertInfo = tr("This copy of Sandboxie+ is certified for: %1").arg(GetArguments(g_Certificate, L'\n', L':').value("NAME"));
-		} else {
-			CertInfo = tr("Sandboxie+ is free for personal and non-commercial use.");
-		}
+		if (!g_Certificate.isEmpty())
+			CertInfo = tr("This copy of Sandboxie-Plus is certified for: %1").arg(GetArguments(g_Certificate, L'\n', L':').value("NAME"));
+		else
+			CertInfo = tr("Sandboxie-Plus is free for personal and non-commercial use.");
+
+		QString SbiePath = theAPI->GetSbiePath();
 
 		QString AboutText = tr(
 			"Sandboxie-Plus is an open source continuation of Sandboxie.<br />"
 			"Visit <a href=\"https://sandboxie-plus.com\">sandboxie-plus.com</a> for more information.<br />"
 			"<br />"
-			"%3<br />"
+			"%2<br />"
 			"<br />"
-			"Driver version: %1<br />"
-			"Features: %2<br />"
+			"Features: %3<br />"
+			"<br />"
+			"Installation: %1<br />"
+			"SbieDrv.sys: %4<br /> SbieSvc.exe: %5<br /> SbieDll.dll: %6<br />"
 			"<br />"
 			"Icons from <a href=\"https://icons8.com\">icons8.com</a>"
-		).arg(theAPI->GetVersion()).arg(theAPI->GetFeatureStr()).arg(CertInfo);
+		).arg(SbiePath).arg(CertInfo).arg(theAPI->GetFeatureStr())
+		.arg(GetProductVersion(SbiePath + "\\SbieDrv.sys")).arg(GetProductVersion(SbiePath + "\\SbieSvc.exe")).arg(GetProductVersion(SbiePath + "\\SbieDll.dll"));
 
 		QMessageBox *msgBox = new QMessageBox(this);
 		msgBox->setAttribute(Qt::WA_DeleteOnClose);
