@@ -1327,7 +1327,7 @@ _FX BOOLEAN WSA_InitNetProxy()
     }
 
     SCertInfo CertInfo = { 0 };
-    if (!NT_SUCCESS(SbieApi_Call(API_QUERY_DRIVER_INFO, 3, -1, (ULONG_PTR)&CertInfo, sizeof(CertInfo))) || !CERT_IS_ADVANCED(CertInfo)) {
+    if (!NT_SUCCESS(SbieApi_Call(API_QUERY_DRIVER_INFO, 3, -1, (ULONG_PTR)&CertInfo, sizeof(CertInfo))) || !CERT_IS_LEVEL(CertInfo, eCertAdvanced)) {
 
         const WCHAR* strings[] = { L"NetworkUseProxy" , NULL };
         SbieApi_LogMsgExt(-1, 6009, strings);
@@ -1381,7 +1381,7 @@ _FX BOOLEAN WSA_Init(HMODULE module)
 
     List_Init(&WSA_FwList);
 
-    WSA_WFPisEnabled = SbieApi_QueryConfBool(NULL, L"NetworkEnableWFP", FALSE);
+    WSA_WFPisEnabled = (Dll_DriverFlags & SBIE_FEATURE_FLAG_WFP) != 0;
     if(WSA_WFPisEnabled)
         WSA_WFPisBlocking = !Config_GetSettingsForImageName_bool(L"AllowNetworkAccess", TRUE);
     else // load rules only when the driver is not doing the filtering
@@ -1414,9 +1414,9 @@ _FX BOOLEAN WSA_Init(HMODULE module)
 
         //
         // Note: for our proxy implementation we need to have the sockets in blocking mode
-        // unfortinately windows does not provide a way to query the blockign flag
+        // unfortunately windows does not provide a way to query the blocking flag
         // not even when asking the driver directly :(
-        // Hence we need to monitor the below calls and maintain and cache the blockign state
+        // Hence we need to monitor the below calls and maintain and cache the blocking state
         //
 
 	    //int InputBuffer[] = { 2,0,0,0 };

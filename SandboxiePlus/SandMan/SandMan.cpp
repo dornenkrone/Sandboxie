@@ -1671,9 +1671,9 @@ void CSandMan::OnMessage(const QString& MsgData)
 			BoxName = theAPI->GetGlobalSettings()->GetText("DefaultBox", "DefaultBox");
 
 		if (!BoxName.isEmpty())
-			RunStart(BoxName == "*DFP*" ? "" : BoxName, CmdLine, false, WrkDir);
+			RunStart(BoxName == "*DFP*" ? "" : BoxName, CmdLine, CSbieAPI::eStartDefault, WrkDir);
 		else
-			RunSandboxed(QStringList(CmdLine), BoxName, WrkDir);
+			RunSandboxed(QStringList(CmdLine), BoxName, WrkDir, true);
 	}
 	else if (Message.left(3) == "Op:")
 	{
@@ -1702,27 +1702,28 @@ void CSandMan::dragEnterEvent(QDragEnterEvent* e)
 	}
 }
 
-bool CSandMan::RunSandboxed(const QStringList& Commands, QString BoxName, const QString& WrkDir)
+bool CSandMan::RunSandboxed(const QStringList& Commands, QString BoxName, const QString& WrkDir, bool bShowFCP)
 {
 	if (BoxName.isEmpty())
 		BoxName = theAPI->GetGlobalSettings()->GetText("DefaultBox", "DefaultBox");
 	CSelectBoxWindow* pSelectBoxWindow = new CSelectBoxWindow(Commands, BoxName, WrkDir, g_GUIParent);
+	if (bShowFCP) pSelectBoxWindow->ShowFCP();
 	connect(this, SIGNAL(Closed()), pSelectBoxWindow, SLOT(close()));
 	//pSelectBoxWindow->show();
 	return SafeExec(pSelectBoxWindow) == 1;
 }
 
-SB_RESULT(quint32) CSandMan::RunStart(const QString& BoxName, const QString& Command, bool Elevated, const QString& WorkingDir, QProcess* pProcess)
+SB_RESULT(quint32) CSandMan::RunStart(const QString& BoxName, const QString& Command, CSbieAPI::EStartFlags Flags, const QString& WorkingDir, QProcess* pProcess)
 {
 	auto pBoxEx = theAPI->GetBoxByName(BoxName).objectCast<CSandBoxPlus>();
-	if (pBoxEx && pBoxEx->UseImageFile() && pBoxEx->GetMountRoot().isEmpty()){
+	if (pBoxEx && pBoxEx->UseImageFile() && pBoxEx->GetMountRoot().isEmpty()) {
 
 		SB_STATUS Status = ImBoxMount(pBoxEx, true);
 		if (Status.IsError())
 			return Status;
 	}
 
-	return theAPI->RunStart(BoxName, Command, Elevated, WorkingDir, pProcess);
+	return theAPI->RunStart(BoxName, Command, Flags, WorkingDir, pProcess);
 }
 
 SB_STATUS CSandMan::ImBoxMount(const CSandBoxPtr& pBox, bool bAutoUnmount)
@@ -2970,14 +2971,8 @@ bool CSandMan::CheckCertificate(QWidget* pWidget, int iType)
 	QString Message;
 	if (iType == 1 || iType == 2)
 	{
-		if (iType == 1) {
-			if (CERT_IS_LEVEL(g_CertInfo, eCertAdvanced))
-				return true;
-		}
-		else {
-			if (CERT_IS_ADVANCED(g_CertInfo))
-				return true;
-		}
+		if (CERT_IS_LEVEL(g_CertInfo, iType == 1 ? eCertAdvanced1 : eCertAdvanced))
+			return true;
 
 		Message = tr("The selected feature requires an <b>advanced</b> supporter certificate.");
 		if (iType == 2 && CERT_IS_TYPE(g_CertInfo, eCertPatreon))

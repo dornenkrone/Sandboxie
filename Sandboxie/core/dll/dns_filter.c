@@ -194,7 +194,7 @@ _FX BOOLEAN WSA_InitNetDnsFilter(HMODULE module)
         map_init(&WSA_LookupMap, Dll_Pool);
 
         SCertInfo CertInfo = { 0 };
-        if (!NT_SUCCESS(SbieApi_Call(API_QUERY_DRIVER_INFO, 3, -1, (ULONG_PTR)&CertInfo, sizeof(CertInfo))) || !CERT_IS_ADVANCED(CertInfo)) {
+        if (!NT_SUCCESS(SbieApi_Call(API_QUERY_DRIVER_INFO, 3, -1, (ULONG_PTR)&CertInfo, sizeof(CertInfo))) || !CERT_IS_LEVEL(CertInfo, eCertAdvanced)) {
 
             const WCHAR* strings[] = { L"NetworkDnsFilter" , NULL };
             SbieApi_LogMsgExt(-1, 6009, strings);
@@ -322,7 +322,7 @@ _FX int WSA_WSALookupServiceNextW(
 
         //
         // This is a bit a simplified implementation, it assumes that all results are always of the same time
-        // else it may truncate it early, also it cant return more results the have been found. 
+        // else it may truncate it early, also it can't return more results the have been found. 
         //
 
         if (lpqsResults->dwNumberOfCsAddrs > 0) {
@@ -332,7 +332,7 @@ _FX int WSA_WSALookupServiceNextW(
             for (DWORD i = 0; i < lpqsResults->dwNumberOfCsAddrs; i++) {
 
                 USHORT af = lpqsResults->lpcsaBuffer[i].RemoteAddr.lpSockaddr->sa_family;
-                for (; entry && entry->Type != af; entry = (IP_ENTRY*)List_Next(entry)); // skip to an antry of teh right type
+                for (; entry && entry->Type != af; entry = (IP_ENTRY*)List_Next(entry)); // skip to an entry of the right type
                 if (!entry) { // no more entries clear remaining results
                     lpqsResults->dwNumberOfCsAddrs = i;
                     break;
@@ -356,7 +356,7 @@ _FX int WSA_WSALookupServiceNextW(
 
                 for (PCHAR* Addr = (PCHAR*)(((UINT_PTR)hp->h_addr_list + (UINT_PTR)hp)); *Addr; Addr++) {
 
-                    for (; entry && entry->Type != hp->h_addrtype; entry = (IP_ENTRY*)List_Next(entry)); // skip to an antry of teh right type
+                    for (; entry && entry->Type != hp->h_addrtype; entry = (IP_ENTRY*)List_Next(entry)); // skip to an entry of the right type
                     if (!entry) { // no more entries clear remaining results
                         *Addr = 0;
                         continue;

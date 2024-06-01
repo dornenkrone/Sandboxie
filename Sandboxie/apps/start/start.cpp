@@ -29,6 +29,8 @@
 #include "common/my_version.h"
 #include "msgs/msgs.h"
 #include "core/drv/api_defs.h"
+#include <psapi.h>
+#include <Shlwapi.h>
 
 
 //---------------------------------------------------------------------------
@@ -1661,6 +1663,44 @@ void StartAllAutoRunEntries()
 
 
 //---------------------------------------------------------------------------
+// GetParentPIDAndName
+//---------------------------------------------------------------------------
+
+extern "C" WINBASEAPI BOOL WINAPI QueryFullProcessImageNameW(HANDLE hProcess, DWORD dwFlags, LPWSTR lpExeName, PDWORD lpdwSize);
+
+DWORD GetParentPIDAndName(DWORD ProcessID, LPTSTR lpszBuffer_Parent_Name) 
+{
+	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, ProcessID);
+	if (!ProcessID) 
+		return 0;
+
+	PROCESS_BASIC_INFORMATION pbi;
+	NTSTATUS status = NtQueryInformationProcess(hProcess, ProcessBasicInformation, (LPVOID)&pbi, sizeof(pbi), NULL);
+
+	DWORD dwParentID = 0;
+	if (NT_SUCCESS(status)) {
+		
+		dwParentID = (DWORD)pbi.InheritedFromUniqueProcessId;
+
+		if (NULL != lpszBuffer_Parent_Name) {
+
+			HANDLE hParentProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, dwParentID);
+            if (hParentProcess) {
+
+                DWORD dwSize;
+                BOOL ret = QueryFullProcessImageNameW(hParentProcess, 0, lpszBuffer_Parent_Name, &dwSize);
+
+                CloseHandle(hParentProcess);
+            }
+		}
+	}
+
+	CloseHandle(hProcess);
+	return dwParentID;
+}
+
+
+//---------------------------------------------------------------------------
 // RestartInSandbox
 //---------------------------------------------------------------------------
 
@@ -1719,6 +1759,25 @@ ULONG RestartInSandbox(void)
     wcscpy(ptr, ChildCmdLine);
 
     SbieApi_GetHomePath(NULL, 0, dir, 1020);
+
+    //
+    //
+    //
+
+	if (SbieApi_QueryConfBool(BoxName, L"AlertBeforeStart", FALSE)) {
+
+        WCHAR parent_image[1020] = L"";
+		GetParentPIDAndName(GetCurrentProcessId(), parent_image);
+
+		WCHAR* text = SbieDll_FormatMessage1(MSG_3198, BoxName);
+		if (MessageBoxW(NULL, text, Sandboxie_Start_Title, MB_YESNO) == IDNO)
+			return EXIT_FAILURE;
+
+        if (_wcsnicmp(parent_image, dir, wcslen(dir)) != 0) {
+            if (MessageBoxW(NULL, SbieDll_FormatMessage0(3199), Sandboxie_Start_Title, MB_YESNO) == IDNO)
+                return EXIT_FAILURE;
+        }
+	}
 
     //
     //

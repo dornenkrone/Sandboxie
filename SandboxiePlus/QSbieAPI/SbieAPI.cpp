@@ -1029,14 +1029,17 @@ QString CSbieAPI::GetUserSection(QString* pUserName, bool* pIsAdmin) const
 	return UserSection;
 }
 
-SB_RESULT(quint32) CSbieAPI::RunStart(const QString& BoxName, const QString& Command, bool Elevated, const QString& WorkingDir, QProcess* pProcess)
+SB_RESULT(quint32) CSbieAPI::RunStart(const QString& BoxName, const QString& Command, EStartFlags Flags, const QString& WorkingDir, QProcess* pProcess)
 {
 	if (m_SbiePath.isEmpty())
 		return SB_ERR(SB_PathFail);
 
 	QString StartArgs;
-	if(Elevated)
+	if (Flags & eStartElevated)
 		StartArgs += "/elevated ";
+	if (Flags & eStartFCP)
+		StartArgs += "/fcp ";
+
 	if (!BoxName.isEmpty())
 		StartArgs += "/box:" + BoxName + " ";
 	else
@@ -1055,7 +1058,7 @@ SB_RESULT(quint32) CSbieAPI::RunStart(const QString& BoxName, const QString& Com
 		pProcess->setNativeArguments(StartArgs);
 		pProcess->start();
 		pid = pProcess->processId();
-	} 
+	}
 	else {
 		QProcess process;
 		//process.setWorkingDirectory(QString::fromWCharArray(sysPath));

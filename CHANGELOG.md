@@ -3,27 +3,54 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 
+## [1.14.1 / 5.69.1] - 2024-05-??
+
+### Added
+- Add "Sandboxie\All Sandboxes" SID into token with SandboxieLogon [#3191](https://github.com/sandboxie-plus/Sandboxie/issues/3191)
+  - To use this feature SandboxieAllGroup=y must be enabled
+  - Note: that this fundamentaly changes the mechanism Sbie uses for token creation, the new mechanism can be enabled separately with "UseCreateToken=y"
+- Added "EditAdminOnly=y" can now be configured per box
+- Add UI for CoverWindows in NewBoxWizard.
+- Add UI option to start unsandboxed process but force child processes in SelectBoxWindow.
+- Add option "AlertBeforeStart".When it is set,a prompt pops up before launching a new program into the sandbox using "Start.exe" and checks if the program that started "Start.exe" is a Sandboxie component itself,if it is not, a warning pops up.
+- Add option for EditAdminOnly in SetupWizard.
+
+### Changed
+- split the advanced new box wizard page in two
+- reorganized box options a bit
+
+### Fixed
+- fixed issue with proxy authentication setting
+- fixed memory leak in sbiesvc
+- fixed issue with inconsistent WFP option application [#3900](https://github.com/sandboxie-plus/Sandboxie/issues/3900)
+- fixed resource leak in buffer hashing function
+- fixed DLL name corruption when BlockInterferenceControl is enabled [#3945](https://github.com/sandboxie-plus/Sandboxie/issues/3945)
 
 
 
-## [1.14.0 / 5.69.0] - 2024-05-??
+
+## [1.14.0 / 5.69.0] - 2024-05-17
 
 ### Added
 - Add option to limit the memory of sandboxed process and the number of process in single sandbox through job object. (thanks Yeyixiao)
-  - Use "TotalMemoryLimit"(Number,limit whole sandbox) and "ProcessMemoryLimit"(Number,limit single process) to set.
+  - Use "TotalMemoryLimit"(Number,limit whole sandbox) and "ProcessMemoryLimit"(Number,limit single process) to set memory limit.
+  - Use "ProcessNumberLimit"(Number) to set process number limit.
 - Add ability to modified sandboxed process logic speed (reduced fixed latency, modified single-player speed, etc.) (thanks Yeyixiao)
   - Use "UseChangeSpeed=y" to open this feature,use "AddTickSpeed"/"AddSleepSpeed"/"AddTimerSpeed"/"LowTickSpeed"/"LowSleepSpeed"/"LowTimerSpeed"(Number) to set.
-  - When set "AddSleepSpeed=0",all Sleep funcation call will be skip.
+  - When set to "AddSleepSpeed=0", all sleep function calls will be skipped.
 - Added /fcp /force_children commandline option to start.exe it allows to start a program unsandboxed but have all its children sandboxed
 
 - added ability to fore sandboxed processes to use a pre defined socks 5 proxy
-- added ability to intercept DNS queries such that thay can be log and/or redirected
+- added ability to intercept DNS queries so that they can be logged and/or redirected
 - added support for SOCKS5 proxy authentication based on RFC1928 (thanks Deezzir)
 - added Test Dialog UI for SOCKS5 proxy (thanks Deezzir)
 - added ability to automatically removes template references that begin with “Template_Temp_” in the sandbox.
 
 ### Changed
-- validated compatybility with windows build 26212 and updated dyn data
+- validated compatibility with windows build 26217 and updated dyn data
+
+### Fixed
+- fixed an issue with an early batch of Large Supporter certificates
 
 
 

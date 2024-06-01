@@ -207,7 +207,8 @@ COptionsWindow::COptionsWindow(const QSharedPointer<CSbieIni>& pBox, const QStri
 	ui.tabsGeneral->setTabIcon(1, CSandMan::GetIcon("Folder"));
 	ui.tabsGeneral->setTabIcon(2, CSandMan::GetIcon("Move"));
 	ui.tabsGeneral->setTabIcon(3, CSandMan::GetIcon("NoAccess"));
-	ui.tabsGeneral->setTabIcon(4, CSandMan::GetIcon("Run"));
+	ui.tabsGeneral->setTabIcon(4, CSandMan::GetIcon("Fence"));
+	ui.tabsGeneral->setTabIcon(5, CSandMan::GetIcon("Run"));
 
 	ui.tabsSecurity->setCurrentIndex(0);
 	ui.tabsSecurity->setTabIcon(0, CSandMan::GetIcon("Shield7"));
@@ -514,6 +515,7 @@ COptionsWindow::COptionsWindow(const QSharedPointer<CSbieIni>& pBox, const QStri
 	connect(ui.chkStartBlockMsg, SIGNAL(clicked(bool)), this, SLOT(OnStartChanged()));
 	ui.treeStart->setItemDelegateForColumn(0, new ProgramsDelegate(this, ui.treeStart, -1, this));
 	connect(ui.treeStart, SIGNAL(itemChanged(QTreeWidgetItem *, int)), this, SLOT(OnStartChanged(QTreeWidgetItem *, int)));
+	connect(ui.chkAlertBeforeStart, SIGNAL(clicked(bool)), this, SLOT(OnStartChanged()));
 	//
 
 	CreateNetwork();
